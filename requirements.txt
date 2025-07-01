@@ -1,0 +1,9 @@
+websockets
+Pillow
+mss
+pygetwindow
+PyAutoGUI
+psutil
+pyperclip
+plyer
+playsound
