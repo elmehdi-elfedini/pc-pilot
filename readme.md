@@ -55,7 +55,6 @@ You need Python 3 installed on the PC you want to control. You can get it from [
     ```bash
     pip install -r requirements.txt
     ```
-    *(You will need to create a `requirements.txt` file. See the section below.)*
 
 ### Create `requirements.txt`
 
