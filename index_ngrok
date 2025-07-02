@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PC-Pilot Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Poppins', sans-serif; }
+        .main-header { display: flex; justify-content: space-between; align-items: center; }
+        #screenshot-container { position: relative; background-color: #000; border-radius: .5rem; cursor: crosshair; }
+        #screenshot { max-width: 100%; height: auto; display: block; border-radius: .5rem; }
+        #fullscreen-icon { display: none; }
+        
+        #fullscreen-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); backdrop-filter: blur(5px); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 1rem; box-sizing: border-box; }
+        #fullscreen-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 5px; transition: transform 0.3s ease-in-out; }
+        #close-fullscreen { position: absolute; top: 20px; right: 20px; font-size: 2rem; color: white; cursor: pointer; z-index: 10001; }
+        
+        #fullscreen-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(30, 30, 30, 0.75); border-radius: 50px; padding: 8px 15px; display: flex; gap: 20px; z-index: 10001; }
+        #fullscreen-controls button { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 5px; }
+        #fullscreen-controls button:hover { color: #0d6efd; }
+        
+        .toast-container { z-index: 10000; }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        .accordion-button:not(.collapsed) { background-color: var(--bs-secondary-bg); }
+        .file-explorer-path { font-family: 'Courier New', Courier, monospace; word-break: break-all; background-color: var(--bs-secondary-bg); padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); }
+        .file-item { cursor: pointer; }
+        .file-item:hover { background-color: var(--bs-tertiary-bg); }
+        .chart-container { position: relative; height: 70px; width: 100%; margin-bottom: 8px; }
+        .process-item .btn-close, .window-item .btn-close { font-size: .75rem; } 
+        .info-label { font-weight: 600; color: var(--bs-secondary-color); }
+    </style>
+</head>
+<body>
+    <main class="container py-4">
+        <header class="pb-3 mb-4 border-bottom main-header">
+            <a href="/" class="d-flex align-items-center text-body-emphasis text-decoration-none"><i class="bi-airplane-fill me-2 fs-2"></i><span class="fs-4">PC-Pilot Pro</span></a>
+            <div class="d-flex align-items-center">
+                <div id="status-indicator" class="me-3 small"><i class="bi-reception-0"></i> Connecting...</div>
+                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="theme-switcher"><label class="form-check-label" for="theme-switcher"><i class="bi bi-sun-fill"></i></label></div>
+            </div>
+        </header>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div id="screenshot-container" title="Click to send a mouse click. Double-click to toggle fullscreen.">
+                    <img id="screenshot" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="PC Desktop View">
+                </div>
+                <div class="text-center mt-2">
+                    <button class="btn btn-outline-secondary btn-sm" id="open-fullscreen-btn">
+                        <i class="bi bi-arrows-angle-expand me-1"></i> Fullscreen
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="accordion" id="mainAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSystemStatus">
+                        <i class="bi-graph-up-arrow me-2"></i>Live System Status
+                    </button>
+                </h2>
+                <div id="collapseSystemStatus" class="accordion-collapse collapse show" data-bs-parent="#mainAccordion">
+                    <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-4 mb-md-0">
+                                <div class="d-flex justify-content-between small"><span>CPU</span><span id="cpu-usage-label">0%</span></div>
+                                <div class="chart-container"><canvas id="cpu-chart"></canvas></div>
+                                <div class="progress" role="progressbar"><div id="cpu-progress" class="progress-bar"></div></div>
+                            </div>
+                            <div class="col-md-4 mb-4 mb-md-0">
+                                <div class="d-flex justify-content-between small"><span>RAM</span><span id="ram-usage-label">0%</span></div>
+                                <div class="chart-container"><canvas id="ram-chart"></canvas></div>
+                                <div class="progress" role="progressbar"><div id="ram-progress" class="progress-bar bg-success"></div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex justify-content-between small"><span>Disk</span><span id="disk-usage-label">0%</span></div>
+                                <div class="chart-container"><canvas id="disk-chart"></canvas></div>
+                                <div class="progress" role="progressbar"><div id="disk-progress" class="progress-bar bg-warning"></div></div>
+                            </div>
+                        </div>
+                         <div id="battery-status-container" class="d-none mt-3 text-center small text-muted">
+                            <span class="fw-bold">Battery:</span> <span id="battery-status">N/A</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseQuickActions">
+                        <i class="bi-lightning-charge-fill me-2"></i>Quick Actions
+                    </button>
+                </h2>
+                <div id="collapseQuickActions" class="accordion-collapse collapse" data-bs-parent="#mainAccordion">
+                    <div class="accordion-body">
+                        <p class="text-muted small">One-tap actions for common tasks.</p>
+                        <!-- ### MODIFIED: Quick Actions reverted to original version ### -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                            <button class="btn btn-primary" type="button" id="quick-screenshot-btn"><i class="bi-camera-fill me-1"></i> Take Screenshot</button>
+                            <button class="btn btn-secondary" type="button" id="quick-desktop-btn"><i class="bi-display me-1"></i> Show Desktop</button>
+                        </div>
+                        <p class="text-muted small mt-3">Note: Live screen video recording is a complex feature not available in this version.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProcesses">
+                        <i class="bi-cpu-fill me-2"></i>Process Manager
+                    </button>
+                </h2>
+                <div id="collapseProcesses" class="accordion-collapse collapse" data-bs-parent="#mainAccordion">
+                    <div class="accordion-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <p class="text-muted small mb-0">View running applications.</p>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="sendCommand('get_processes')"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                        </div>
+                        <div class="list-group list-group-flush" id="process-list" style="max-height: 300px; overflow-y: auto;">
+                            <div class="list-group-item">Click Refresh to load processes...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSysInfo">
+                        <i class="bi-pc-display-horizontal me-2"></i>System Information
+                    </button>
+                </h2>
+                <div id="collapseSysInfo" class="accordion-collapse collapse" data-bs-parent="#mainAccordion">
+                     <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-sm-6 mb-2"><span class="info-label">OS:</span> <span id="info-os">N/A</span></div>
+                            <div class="col-sm-6 mb-2"><span class="info-label">Hostname:</span> <span id="info-hostname">N/A</span></div>
+                            <div class="col-sm-6 mb-2"><span class="info-label">User:</span> <span id="info-user">N/A</span></div>
+                            <div class="col-sm-6 mb-2"><span class="info-label">Uptime:</span> <span id="info-uptime">N/A</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExplorer"><i class="bi-folder2-open me-2"></i>File Explorer</button></h2><div id="collapseExplorer" class="accordion-collapse collapse" data-bs-parent="#mainAccordion"><div class="p-0"><div class="file-explorer-path"><code id="current-path">/</code></div><div class="list-group list-group-flush" id="file-list" style="max-height: 300px; overflow-y: auto;"><div class="list-group-item">Connecting...</div></div></div></div></div>
+            <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWindows"><i class="bi-stack me-2"></i>Open Windows</button></h2><div id="collapseWindows" class="accordion-collapse collapse" data-bs-parent="#mainAccordion"><div class="list-group list-group-flush" id="window-list" style="max-height: 250px; overflow-y: auto;"><div class="list-group-item">Waiting for data...</div></div></div></div>
+            <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseControls"><i class="bi-controller me-2"></i>Controls</button></h2><div id="collapseControls" class="accordion-collapse collapse" data-bs-parent="#mainAccordion"><div class="accordion-body"><h6 class="text-muted">Send Notification to PC</h6><div class="mb-2"><input type="text" id="notification-title" class="form-control form-control-sm" placeholder="Notification Title"></div><div class="input-group mb-4"><input type="text" id="notification-message" class="form-control" placeholder="Notification Message..."><button class="btn btn-outline-secondary" type="button" id="send-notification-btn"><i class="bi bi-bell-fill me-1"></i> Send</button></div><hr><h6 class="text-muted">Media & Volume</h6><div class="d-flex justify-content-around mb-4"><button class="btn btn-secondary rounded-circle" onclick="sendCommand('prev_track')"><i class="bi-skip-start-fill"></i></button><button class="btn btn-primary rounded-circle" onclick="sendCommand('play_pause')"><i class="bi-play-fill"></i></button><button class="btn btn-secondary rounded-circle" onclick="sendCommand('next_track')"><i class="bi-skip-end-fill"></i></button><button class="btn btn-secondary rounded-circle ms-4" onclick="sendCommand('volume_down')"><i class="bi-volume-down-fill"></i></button><button class="btn btn-primary rounded-circle" onclick="sendCommand('mute')"><i class="bi-volume-mute-fill"></i></button><button class="btn btn-secondary rounded-circle" onclick="sendCommand('volume_up')"><i class="bi-volume-up-fill"></i></button></div><hr><h6 class="text-muted">Open URL on PC</h6><div class="input-group mb-4"><input type="url" id="url-to-open" class="form-control" placeholder="https://example.com"><button class="btn btn-outline-secondary" type="button" id="open-url-button"><i class="bi-box-arrow-up-right me-1"></i> Open</button></div><hr><h6 class="text-muted">Clipboard Control</h6><div class="input-group"><input type="text" id="clipboard-text" class="form-control" placeholder="Text to send to PC clipboard..."><button class="btn btn-outline-secondary" type="button" id="set-clipboard-button">Set</button></div><div class="d-grid gap-2 mt-2 mb-4"><button class="btn btn-outline-secondary btn-sm" type="button" id="get-clipboard-button">Get PC Clipboard ↓</button><textarea id="clipboard-display" class="form-control form-control-sm" rows="2" readonly placeholder="PC clipboard content will appear here..."></textarea></div><hr><h6 class="text-muted">Type Text</h6><div class="input-group mb-4"><input type="text" id="text-to-type" class="form-control" placeholder="Enter text to type on PC..."><button class="btn btn-outline-secondary" type="button" id="type-button">Type</button></div><hr><h6 class="text-muted">Upload File to Desktop</h6><div class="input-group mb-4"><input type="file" class="form-control" id="file-upload-input"><button class="btn btn-outline-secondary" type="button" id="upload-button">Upload</button></div><hr><h6 class="text-muted">Power</h6><div class="d-flex justify-content-around"><button class="btn btn-warning rounded-circle" onclick="sendCommand('lock')" title="Lock PC"><i class="bi-lock-fill"></i></button><button class="btn btn-danger rounded-circle" onclick="confirmAndSendCommand('restart', 'Are you sure you want to RESTART the PC?')" title="Restart PC"><i class="bi-arrow-repeat"></i></button><button class="btn btn-danger rounded-circle" onclick="confirmAndSendCommand('shutdown', 'Are you sure you want to SHUT DOWN the PC?')" title="Shutdown PC"><i class="bi-power"></i></button></div></div></div></div>
+        </div>
+    </main>
+
+    <div id="fullscreen-overlay">
+        <i id="close-fullscreen" class="bi bi-x-lg"></i>
+        <img id="fullscreen-image" src="" alt="Fullscreen View">
+        <div id="fullscreen-controls">
+            <button id="fullscreen-native-btn" title="Toggle Native Fullscreen"><i class="bi bi-arrows-fullscreen"></i></button>
+            <button id="fullscreen-rotate-btn" title="Rotate Screen"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // DOM Elements
+        const screenshotImg = document.getElementById('screenshot'),
+              screenshotContainer = document.getElementById('screenshot-container'),
+              windowList = document.getElementById('window-list'),
+              statusIndicator = document.getElementById('status-indicator'),
+              fullscreenOverlay = document.getElementById('fullscreen-overlay'),
+              fullscreenImage = document.getElementById('fullscreen-image'),
+              closeFullscreenBtn = document.getElementById('close-fullscreen'),
+              toastContainer = document.querySelector('.toast-container'),
+              cpuUsageLabel = document.getElementById('cpu-usage-label'),
+              ramUsageLabel = document.getElementById('ram-usage-label'),
+              diskUsageLabel = document.getElementById('disk-usage-label'),
+              cpuProgress = document.getElementById('cpu-progress'),
+              ramProgress = document.getElementById('ram-progress'),
+              diskProgress = document.getElementById('disk-progress'),
+              cpuChartElem = document.getElementById('cpu-chart'),
+              ramChartElem = document.getElementById('ram-chart'),
+              diskChartElem = document.getElementById('disk-chart'),
+              batteryStatus = document.getElementById('battery-status'),
+              batteryStatusContainer = document.getElementById('battery-status-container'),
+              fullscreenNativeBtn = document.getElementById('fullscreen-native-btn'),
+              fullscreenRotateBtn = document.getElementById('fullscreen-rotate-btn'),
+              openFullscreenBtn = document.getElementById('open-fullscreen-btn'),
+              typeButton = document.getElementById('type-button'), textToTypeInput = document.getElementById('text-to-type'), uploadButton = document.getElementById('upload-button'), fileUploadInput = document.getElementById('file-upload-input'), openUrlButton = document.getElementById('open-url-button'), urlToOpenInput = document.getElementById('url-to-open'), setClipboardButton = document.getElementById('set-clipboard-button'), getClipboardButton = document.getElementById('get-clipboard-button'), clipboardTextInput = document.getElementById('clipboard-text'), clipboardDisplay = document.getElementById('clipboard-display'), quickScreenshotBtn = document.getElementById('quick-screenshot-btn'), quickDesktopBtn = document.getElementById('quick-desktop-btn'), sendNotificationBtn = document.getElementById('send-notification-btn'), notificationTitleInput = document.getElementById('notification-title'), notificationMessageInput = document.getElementById('notification-message'), currentPathElem = document.getElementById('current-path'), fileListElem = document.getElementById('file-list');
+        
+        const processList = document.getElementById('process-list'),
+              infoOs = document.getElementById('info-os'),
+              infoHostname = document.getElementById('info-hostname'),
+              infoUser = document.getElementById('info-user'),
+              infoUptime = document.getElementById('info-uptime');
+
+        let socket, homeDirectory = null, cpuChart, ramChart, diskChart;
+        const MAX_DATA_POINTS = 30;
+        let currentRotation = 0;
+
+        function createRealtimeChart(canvasElement, label, color) { const ctx = canvasElement.getContext('2d'); const gradient = ctx.createLinearGradient(0, 0, 0, 70); gradient.addColorStop(0, `${color}4D`); gradient.addColorStop(1, `${color}00`); return new Chart(ctx, { type: 'line', data: { labels: Array(MAX_DATA_POINTS).fill(''), datasets: [{ label: label, data: Array(MAX_DATA_POINTS).fill(null), borderColor: color, borderWidth: 2, fill: true, backgroundColor: gradient, pointRadius: 0, tension: 0.4, }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, display: false, }, x: { display: false, } }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 250 } } }); }
+        function updateChartData(chart, value) { chart.data.labels.shift(); chart.data.labels.push(''); chart.data.datasets[0].data.shift(); chart.data.datasets[0].data.push(value); chart.update(); }
+
+        function connect() {
+            const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+            socket = new WebSocket(wsProtocol + window.location.host + "/ws");
+
+            socket.onopen = () => { 
+                statusIndicator.innerHTML = '<i class="bi-reception-4 text-success"></i> Connected'; 
+                sendCommand('get_system_info');
+            };
+            
+            // ✅ LA CORRECTION : Cette section est maintenant correctement structurée
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                switch(data.type) {
+                    case 'combined_update':
+                        // Screenshot
+                        const imgSrc = 'data:image/jpeg;base64,' + data.screenshot;
+                        screenshotImg.src = imgSrc;
+                        fullscreenImage.src = imgSrc;
+
+                        // Windows
+                        let winHtml = data.windows.length > 0 ? data.windows.map(title => {
+                            const escapedTitle = title.replace(/"/g, '"');
+                            return `<div class="list-group-item d-flex justify-content-between align-items-center window-item"><span class="text-truncate" style="max-width: 85%;" title="${escapedTitle}">${title}</span><button class="btn-close close-window-btn" data-title="${escapedTitle}" title="Close Window"></button></div>`;
+                        }).join('') : '<div class="list-group-item">No open windows found.</div>';
+                        windowList.innerHTML = winHtml;
+
+                        // Stats
+                        const stats = data.stats;
+                        cpuUsageLabel.textContent = `${stats.cpu.toFixed(1)}%`;
+                        ramUsageLabel.textContent = `${stats.ram.toFixed(1)}%`;
+                        diskUsageLabel.textContent = `${stats.disk.toFixed(1)}%`;
+                        cpuProgress.style.width = stats.cpu + '%';
+                        ramProgress.style.width = stats.ram + '%';
+                        diskProgress.style.width = stats.disk + '%';
+                        updateChartData(cpuChart, stats.cpu);
+                        updateChartData(ramChart, stats.ram);
+                        updateChartData(diskChart, stats.disk);
+                        if (stats.battery) {
+                            batteryStatusContainer.classList.remove('d-none');
+                            const chargingIcon = stats.battery.charging ? '<i class="bi bi-lightning-charge-fill text-success me-1"></i>' : '';
+                            const statusText = stats.battery.charging ? 'Charging' : 'On Battery';
+                            batteryStatus.innerHTML = `${chargingIcon}${stats.battery.percent.toFixed(0)}% (${statusText})`;
+                        } else {
+                            batteryStatusContainer.classList.add('d-none');
+                        }
+                        break;
+                    
+                    case 'command_response':
+                        showToast(data.message, data.status === 'error' ? 'danger' : 'success');
+                        break;
+                    case 'clipboard_content':
+                        clipboardDisplay.value = data.content;
+                        showToast('PC clipboard content received!');
+                        break;
+                    case 'directory_listing':
+                        if (!homeDirectory) homeDirectory = data.path;
+                        renderFileExplorer(data);
+                        break;
+                    case 'file_download':
+                        downloadFile(data.filename, data.filedata);
+                        showToast(`Downloading ${data.filename}...`);
+                        break;
+                    case 'system_info':
+                        infoOs.textContent = data.info.os;
+                        infoHostname.textContent = data.info.hostname;
+                        infoUser.textContent = data.info.user;
+                        infoUptime.textContent = data.info.uptime;
+                        break;
+                    case 'process_list':
+                        renderProcessList(data.processes);
+                        break;
+                }
+            };
+
+            socket.onclose = () => { statusIndicator.innerHTML = '<i class="bi-reception-0 text-danger"></i> Disconnected'; setTimeout(connect, 3000); };
+            socket.onerror = (error) => { console.error(`WebSocket Error: ${error}`); };
+        }
+        
+        function closeFullscreenView() { fullscreenOverlay.style.display = 'none'; currentRotation = 0; fullscreenImage.style.transform = 'rotate(0deg)'; if (document.fullscreenElement) { document.exitFullscreen(); } }
+
+        // Event Listeners
+        openFullscreenBtn.addEventListener('click', () => { fullscreenOverlay.style.display = 'flex'; });
+        screenshotContainer.addEventListener('dblclick', () => { fullscreenOverlay.style.display = 'flex'; });
+        closeFullscreenBtn.addEventListener('click', closeFullscreenView);
+        fullscreenOverlay.addEventListener('click', (e) => { if (e.target === fullscreenOverlay) { closeFullscreenView(); } });
+        fullscreenRotateBtn.addEventListener('click', () => { currentRotation = (currentRotation + 90) % 360; fullscreenImage.style.transform = `rotate(${currentRotation}deg)`; });
+        fullscreenNativeBtn.addEventListener('click', () => { if (!document.fullscreenElement) { fullscreenOverlay.requestFullscreen().catch(err => { alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`); }); } else { document.exitFullscreen(); } });
+        screenshotContainer.addEventListener('click', (e) => { if (e.target.id !== 'screenshot') return; const rect = e.target.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top; const relativeX = x / e.target.offsetWidth; const relativeY = y / e.target.offsetHeight; sendCommand('mouse_click', { x: relativeX, y: relativeY }); });
+        
+        openUrlButton.addEventListener('click', () => { const url = urlToOpenInput.value; if (url) { sendCommand('open_url', url); urlToOpenInput.value = ''; } });
+        setClipboardButton.addEventListener('click', () => { const text = clipboardTextInput.value; if (text) { sendCommand('set_clipboard', text); } });
+        getClipboardButton.addEventListener('click', () => { sendCommand('get_clipboard'); });
+        typeButton.addEventListener('click', () => { const text = textToTypeInput.value; if (text) { sendCommand('type_text', text); textToTypeInput.value = ''; } });
+        uploadButton.addEventListener('click', () => { const file = fileUploadInput.files[0]; if (!file) { showToast('Please select a file first.', 'warning'); return; } const reader = new FileReader(); reader.onload = (e) => { const filedata = e.target.result.split(',')[1]; socket.send(JSON.stringify({ type: 'file_upload', filename: file.name, filedata: filedata })); }; reader.readAsDataURL(file); });
+        quickScreenshotBtn.addEventListener('click', () => sendCommand('take_screenshot'));
+        quickDesktopBtn.addEventListener('click', () => sendCommand('show_desktop'));
+        sendNotificationBtn.addEventListener('click', () => { const title = notificationTitleInput.value; const message = notificationMessageInput.value; if (!message) { showToast('Notification message cannot be empty.', 'warning'); return; } sendCommand('send_notification', { title, message }); notificationMessageInput.value = ''; notificationTitleInput.value = ''; });
+        fileListElem.addEventListener('click', (e) => { const target = e.target.closest('.file-item'); if (!target) return; const type = target.dataset.type; const path = target.dataset.path; if (type === 'dir') { sendCommand('list_directory', { path }); } else if (type === 'file') { if (confirm(`Do you want to download "${path.split('/').pop()}"?`)) { sendCommand('download_file', { path }); } } });
+
+        processList.addEventListener('click', (e) => {
+            const target = e.target.closest('.kill-btn');
+            if (target) {
+                const pid = target.dataset.pid;
+                const pname = target.dataset.pname;
+                if (confirm(`Are you sure you want to terminate "${pname}" (PID: ${pid})?`)) {
+                    sendCommand('kill_process', { pid: parseInt(pid) });
+                }
+            }
+        });
+        
+        windowList.addEventListener('click', (e) => {
+            const target = e.target.closest('.close-window-btn');
+            if (target) {
+                const title = target.dataset.title;
+                if (confirm(`Are you sure you want to close the window: "${title}"?`)) {
+                    sendCommand('close_window', { title: title });
+                }
+            }
+        });
+
+        // Utility and initialization functions
+        function sendCommand(command, payload = null) { if (socket?.readyState === WebSocket.OPEN) { socket.send(JSON.stringify({ type: 'command', command, payload })); } else { showToast('Not connected.', 'danger'); } }
+        function confirmAndSendCommand(command, message) { if (confirm(message)) { sendCommand(command); } }
+        function renderFileExplorer(data) { currentPathElem.textContent = data.path; fileListElem.innerHTML = ''; if (data.path !== data.parent) { const parentItem = `<div class="list-group-item list-group-item-action file-item" data-type="dir" data-path="${data.parent}"><i class="bi bi-arrow-90deg-up me-2"></i>..</div>`; fileListElem.insertAdjacentHTML('beforeend', parentItem); } if (data.items.length === 0 && data.path === data.parent) { fileListElem.innerHTML = '<div class="list-group-item">Folder is empty.</div>'; return; } data.items.forEach(item => { const icon = item.type === 'dir' ? 'bi-folder-fill text-warning' : 'bi-file-earmark-text'; const path = `${data.path}${data.path.endsWith('/') || data.path.endsWith('\\') ? '' : '/'}${item.name}`; const itemHTML = `<div class="list-group-item list-group-item-action file-item" data-type="${item.type}" data-path="${path}"><i class="bi ${icon} me-2"></i>${item.name}</div>`; fileListElem.insertAdjacentHTML('beforeend', itemHTML); }); }
+        
+        function renderProcessList(processes) {
+            processList.innerHTML = '';
+            if (!processes || processes.length === 0) {
+                processList.innerHTML = '<div class="list-group-item">No running processes found or unable to fetch.</div>';
+                return;
+            }
+            processes.forEach(proc => {
+                const itemHTML = `
+                    <div class="list-group-item d-flex justify-content-between align-items-center process-item">
+                        <div>
+                            <span class="fw-bold">${proc.name}</span>
+                            <small class="text-muted d-block">PID: ${proc.pid} | User: ${proc.username || 'N/A'}</small>
+                        </div>
+                        <button class="btn-close kill-btn" data-pid="${proc.pid}" data-pname="${proc.name}" title="Terminate Process"></button>
+                    </div>`;
+                processList.insertAdjacentHTML('beforeend', itemHTML);
+            });
+        }
+
+        function downloadFile(filename, base64data) { const link = document.createElement('a'); link.href = `data:application/octet-stream;base64,${base64data}`; link.download = filename; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
+        function showToast(message, type = 'success') { const toastId = 'toast-' + Date.now(); const toastHTML = `<div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true"><div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>`; toastContainer.insertAdjacentHTML('beforeend', toastHTML); const toastEl = document.getElementById(toastId); const toast = new bootstrap.Toast(toastEl, { delay: 4000 }); toast.show(); toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove()); }
+        const themeSwitcher = document.getElementById('theme-switcher'), htmlEl = document.documentElement; const themeLabel = document.querySelector('label[for="theme-switcher"] i'); function setTheme(theme) { htmlEl.setAttribute('data-bs-theme', theme); localStorage.setItem('theme', theme); themeSwitcher.checked = theme === 'light'; themeLabel.className = theme === 'light' ? 'bi bi-moon-fill' : 'bi bi-sun-fill'; } themeSwitcher.addEventListener('change', () => { setTheme(themeSwitcher.checked ? 'light' : 'dark'); }); const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); setTheme(savedTheme);
+
+        cpuChart = createRealtimeChart(cpuChartElem, 'CPU Usage', '#0d6efd');
+        ramChart = createRealtimeChart(ramChartElem, 'RAM Usage', '#198754');
+        diskChart = createRealtimeChart(diskChartElem, 'Disk Usage', '#ffc107');
+        connect();
+    </script>
+</body>
+</html>
