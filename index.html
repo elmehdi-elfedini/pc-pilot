@@ -163,7 +163,6 @@
     </div>
     <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // DOM Elements
@@ -206,51 +205,54 @@
 
         function connect() {
             const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-            socket = new WebSocket(wsProtocol + window.location.host + "/ws");
-
+            socket = new WebSocket(wsProtocol + window.location.hostname + ":8765");
             socket.onopen = () => { 
                 statusIndicator.innerHTML = '<i class="bi-reception-4 text-success"></i> Connected'; 
                 sendCommand('get_system_info');
             };
-            
-            // ✅ LA CORRECTION : Cette section est maintenant correctement structurée
             socket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 switch(data.type) {
-                    case 'combined_update':
-                        // Screenshot
-                        const imgSrc = 'data:image/jpeg;base64,' + data.screenshot;
+                    case 'screenshot':
+                        const imgSrc = 'data:image/jpeg;base64,' + data.image;
                         screenshotImg.src = imgSrc;
                         fullscreenImage.src = imgSrc;
-
-                        // Windows
-                        let winHtml = data.windows.length > 0 ? data.windows.map(title => {
-                            const escapedTitle = title.replace(/"/g, '"');
-                            return `<div class="list-group-item d-flex justify-content-between align-items-center window-item"><span class="text-truncate" style="max-width: 85%;" title="${escapedTitle}">${title}</span><button class="btn-close close-window-btn" data-title="${escapedTitle}" title="Close Window"></button></div>`;
-                        }).join('') : '<div class="list-group-item">No open windows found.</div>';
+                        break;
+                    case 'windows':
+                        let winHtml = '';
+                        if (data.windows && data.windows.length > 0) {
+                            winHtml = data.windows.map(title => {
+                                const escapedTitle = title.replace(/"/g, '"');
+                                return `
+                                    <div class="list-group-item d-flex justify-content-between align-items-center window-item">
+                                        <span class="text-truncate" style="max-width: 85%;" title="${escapedTitle}">${title}</span>
+                                        <button class="btn-close close-window-btn" data-title="${escapedTitle}" title="Close Window"></button>
+                                    </div>`;
+                            }).join('');
+                        } else {
+                            winHtml = '<div class="list-group-item">No open windows found.</div>';
+                        }
                         windowList.innerHTML = winHtml;
-
-                        // Stats
-                        const stats = data.stats;
-                        cpuUsageLabel.textContent = `${stats.cpu.toFixed(1)}%`;
-                        ramUsageLabel.textContent = `${stats.ram.toFixed(1)}%`;
-                        diskUsageLabel.textContent = `${stats.disk.toFixed(1)}%`;
-                        cpuProgress.style.width = stats.cpu + '%';
-                        ramProgress.style.width = stats.ram + '%';
-                        diskProgress.style.width = stats.disk + '%';
-                        updateChartData(cpuChart, stats.cpu);
-                        updateChartData(ramChart, stats.ram);
-                        updateChartData(diskChart, stats.disk);
-                        if (stats.battery) {
+                        break;
+                    case 'stats':
+                        cpuUsageLabel.textContent = `${data.cpu.toFixed(1)}%`;
+                        ramUsageLabel.textContent = `${data.ram.toFixed(1)}%`;
+                        diskUsageLabel.textContent = `${data.disk.toFixed(1)}%`;
+                        cpuProgress.style.width = data.cpu + '%';
+                        ramProgress.style.width = data.ram + '%';
+                        diskProgress.style.width = data.disk + '%';
+                        updateChartData(cpuChart, data.cpu);
+                        updateChartData(ramChart, data.ram);
+                        updateChartData(diskChart, data.disk);
+                        if (data.battery) {
                             batteryStatusContainer.classList.remove('d-none');
-                            const chargingIcon = stats.battery.charging ? '<i class="bi bi-lightning-charge-fill text-success me-1"></i>' : '';
-                            const statusText = stats.battery.charging ? 'Charging' : 'On Battery';
-                            batteryStatus.innerHTML = `${chargingIcon}${stats.battery.percent.toFixed(0)}% (${statusText})`;
+                            const chargingIcon = data.battery.charging ? '<i class="bi bi-lightning-charge-fill text-success me-1"></i>' : '';
+                            const statusText = data.battery.charging ? 'Charging' : 'On Battery';
+                            batteryStatus.innerHTML = `${chargingIcon}${data.battery.percent.toFixed(0)}% (${statusText})`;
                         } else {
                             batteryStatusContainer.classList.add('d-none');
                         }
                         break;
-                    
                     case 'command_response':
                         showToast(data.message, data.status === 'error' ? 'danger' : 'success');
                         break;
@@ -277,7 +279,6 @@
                         break;
                 }
             };
-
             socket.onclose = () => { statusIndicator.innerHTML = '<i class="bi-reception-0 text-danger"></i> Disconnected'; setTimeout(connect, 3000); };
             socket.onerror = (error) => { console.error(`WebSocket Error: ${error}`); };
         }
